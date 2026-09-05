@@ -8077,3 +8077,27 @@ msgstr "Trạng thái snapshot"
 #: templates/contest/spotlight-ranking.html
 msgid "Snapshot generated"
 msgstr "Snapshot được tạo"
+
+#: templates/contest/spotlight-ranking.html
+msgid "Pause before moving rows"
+msgstr "Dừng trước khi đổi vị trí"
+
+#: templates/contest/spotlight-ranking.html
+msgid "Show the new score and rank before moving, at every playback speed."
+msgstr "Hiện điểm và hạng mới trước khi di chuyển, ở mọi tốc độ chạy."
+
+#: templates/contest/spotlight-ranking.html
+msgid "Hide controls"
+msgstr "Ẩn điều khiển"
+
+#: templates/contest/spotlight-ranking.html
+msgid "Show controls"
+msgstr "Hiện điều khiển"
+
+#: templates/contest/spotlight-ranking.html
+msgid "Show or hide presentation controls"
+msgstr "Ẩn hoặc hiện thanh điều khiển trình diễn"
+
+#: templates/contest/spotlight-ranking.html
+msgid "Close help, show controls or leave fullscreen"
+msgstr "Đóng trợ giúp, hiện điều khiển hoặc thoát toàn màn hình"

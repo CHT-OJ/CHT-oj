@@ -6,6 +6,7 @@ import { ResolverSession, resolveResolverBaseline } from "../core.js";
 import { ManualActionCoordinator } from "../manual-actions.js";
 import { ResolutionPlanner } from "../planner.js";
 import { ResolutionPlayer } from "../player.js";
+import { RESOLUTION_STEP_TYPES } from "../timing.js";
 import { RowSweepPolicy } from "../policies.js";
 import {
   DEFAULT_RESOLVER_SETTINGS,
@@ -45,6 +46,7 @@ test("settings Cancel preserves exact semantic Resolver state", () => {
   manager.beginEdit();
   manager.updateDraft({
     revealHighlightDurationMs: 750,
+    revealHoldDurationMs: 250,
     autoScrollAutomatic: false,
     autoScrollManual: true,
   });
@@ -76,6 +78,7 @@ test("runtime Apply preserves checkpoints and replans future playback with new s
     ...manager.getDraft(),
     speedIndex: 3,
     revealHighlightDurationMs: 750,
+    revealHoldDurationMs: 250,
     autoScrollAutomatic: false,
     autoScrollManual: true,
     singleStepStartRank: 3,
@@ -96,6 +99,7 @@ test("runtime Apply preserves checkpoints and replans future playback with new s
   assert.deepEqual(semanticSnapshot(session), before);
   assert.equal(player.getState().playbackSpeed, 4);
   assert.equal(applied.revealHighlightDurationMs, 750);
+  assert.equal(applied.revealHoldDurationMs, 250);
   assert.equal(applied.autoScrollAutomatic, false);
   assert.equal(applied.autoScrollManual, true);
   assert.equal(player.getState().checkpointCount, checkpointsBefore);
@@ -206,6 +210,35 @@ test("a manual action requested during an atomic autoplay reveal is queued and e
 
   await coordinator.request({ type: "problem", problemId: 101 });
   assert.equal(executed.length, 1, "the target is revalidated before execution");
+});
+
+test("manual batch after an interrupted reveal has its own exact undo boundary", async () => {
+  const session = new ResolverSession(defaultPayload, {
+    baseline: "beginning",
+    tieOrder: "source",
+  });
+  let player;
+  player = new ResolutionPlayer({
+    session,
+    planner: plannerFor(defaultPayload, session),
+    onStep: (step) => {
+      if (step.type === RESOLUTION_STEP_TYPES.REVEAL_CELL) player.cancel("Manual request");
+    },
+  });
+  await player.playContinuous(false);
+  const interruptedState = session.getState();
+  assert.equal(session.getHistoryCursor(), 1);
+  assert.equal(player.getState().checkpointIndex, 0, "no narrative checkpoint yet");
+  player.checkpointBeforeExternalChange("Manual batch");
+  const checkpoints = player.getState().checkpointCount;
+  player.checkpointBeforeExternalChange("Manual batch");
+  assert.equal(player.getState().checkpointCount, checkpoints, "boundary is not duplicated");
+  session.revealBatch(session.getResolvableCellsForContestant(11));
+  await player.syncAfterExternalChange("Manual batch");
+  assert.equal(session.getHistoryCursor(), 2);
+  await player.rewindToPreviousPause();
+  assert.equal(session.getHistoryCursor(), 1);
+  assert.deepEqual(session.getState(), interruptedState);
 });
 
 class FakeClassList {

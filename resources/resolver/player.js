@@ -410,6 +410,17 @@ export class ResolutionPlayer {
     return this.getState();
   }
 
+  checkpointBeforeExternalChange(reason) {
+    // An operator can interrupt a reveal before its narrative pause is recorded.
+    // Preserve that already-committed reveal so undoing the manual batch only
+    // undoes the batch, rather than also removing the interrupted reveal.
+    if (
+      this._checkpoints[this._checkpointIndex]?.historyCursor !== this.session.getHistoryCursor()
+    ) {
+      this._recordPause({ kind: "before-manual", reason });
+    }
+  }
+
   async syncAfterExternalChange(reason = gettext("Resolver state changed manually.")) {
     if (this.running) {
       this.cancel(reason, "manual");

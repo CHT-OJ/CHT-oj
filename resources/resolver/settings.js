@@ -5,12 +5,14 @@ import {
 } from "./controller.js";
 
 export const REVEAL_HIGHLIGHT_DURATIONS_MS = Object.freeze([0, 250, 500, 750, 1000]);
+export const REVEAL_HOLD_DURATIONS_MS = Object.freeze([0, 250, 500, 750, 1000]);
 
 export const DEFAULT_RESOLVER_SETTINGS = Object.freeze({
   baseline: "auto",
   speedIndex: 1,
   autoplayAfterStart: true,
   revealHighlightDurationMs: 500,
+  revealHoldDurationMs: 500,
   autoScrollAutomatic: true,
   autoScrollManual: true,
   singleStepStartRank: 0,
@@ -41,6 +43,9 @@ export function normalizeResolverSettings(values = {}, contestantCount = 0) {
       DEFAULT_RESOLVER_SETTINGS.autoplayAfterStart,
     ),
     revealHighlightDurationMs: normalizeRevealHighlightDuration(values.revealHighlightDurationMs),
+    revealHoldDurationMs: REVEAL_HOLD_DURATIONS_MS.includes(Number(values.revealHoldDurationMs))
+      ? Number(values.revealHoldDurationMs)
+      : DEFAULT_RESOLVER_SETTINGS.revealHoldDurationMs,
     autoScrollAutomatic: normalizeBoolean(
       values.autoScrollAutomatic,
       DEFAULT_RESOLVER_SETTINGS.autoScrollAutomatic,

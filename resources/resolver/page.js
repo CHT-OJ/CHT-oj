@@ -85,6 +85,8 @@ export class ResolverPage {
       payload.contestants.length,
     );
     this.revealHighlightDurationMs = DEFAULT_RESOLVER_SETTINGS.revealHighlightDurationMs;
+    this.revealHoldDurationMs = DEFAULT_RESOLVER_SETTINGS.revealHoldDurationMs;
+    this.heldRowOrder = null;
     this.autoScrollAutomatic = DEFAULT_RESOLVER_SETTINGS.autoScrollAutomatic;
     this.autoScrollManual = DEFAULT_RESOLVER_SETTINGS.autoScrollManual;
     this.setupMode = "initial";
@@ -94,6 +96,7 @@ export class ResolverPage {
     this.busy = false;
     this.totalResolvable = 0;
     this.hudVisible = false;
+    this.controlsVisible = true;
     this.statusMessage = gettext("Ready to start Resolver.");
     this.helpReturnFocus = null;
     this.projectionCache = null;
@@ -121,6 +124,7 @@ export class ResolverPage {
       autoplay: root.querySelector("#resolver-autoplay"),
       autoplayField: root.querySelector("#resolver-autoplay-field"),
       revealHighlight: root.querySelector("#resolver-reveal-highlight"),
+      revealHold: root.querySelector("#resolver-reveal-hold"),
       autoScrollAutomatic: root.querySelector("#resolver-auto-scroll-automatic"),
       autoScrollManual: root.querySelector("#resolver-auto-scroll-manual"),
       awardPlaces: root.querySelector("#resolver-award-places"),
@@ -150,6 +154,9 @@ export class ResolverPage {
       replay: root.querySelector("#resolver-replay"),
       more: root.querySelector(".resolver-toolbar__more"),
       toggleHud: root.querySelector("#resolver-toggle-hud"),
+      toolbar: root.querySelector("#resolver-toolbar"),
+      hideControls: root.querySelector("#resolver-hide-controls"),
+      showControls: root.querySelector("#resolver-show-controls"),
       help: root.querySelector("#resolver-help"),
       fullscreen: root.querySelector("#resolver-fullscreen"),
       changeSetup: root.querySelector("#resolver-change-setup"),
@@ -348,12 +355,7 @@ export class ResolverPage {
     this.nodes.slower.addEventListener("click", () => this._changeSpeed(-1));
     this.nodes.faster.addEventListener("click", () => this._changeSpeed(1));
     this.nodes.back.addEventListener("click", () => {
-      this._pausePlayback();
-      if (this.policyName === "manual") {
-        void this._moveHistory("back");
-      } else {
-        void this.player?.rewindToPreviousPause();
-      }
+      void this._rewind();
     });
     this.nodes.forward.addEventListener("click", () => {
       if (this.policyName === "manual") {
@@ -368,6 +370,8 @@ export class ResolverPage {
     });
     this.nodes.replay.addEventListener("click", () => void this._replay());
     this.nodes.toggleHud.addEventListener("click", () => this._toggleHud());
+    this.nodes.hideControls.addEventListener("click", () => this._toggleControls());
+    this.nodes.showControls.addEventListener("click", () => this._toggleControls());
     this.nodes.help.addEventListener("click", () => this._showShortcuts());
     this.nodes.shortcutsClose.addEventListener("click", () => this._hideShortcuts());
     this.nodes.shortcuts.addEventListener("click", (event) => {
@@ -473,6 +477,7 @@ export class ResolverPage {
         speedIndex: Number(this.nodes.speed.value),
         autoplayAfterStart: this.nodes.autoplay.checked,
         revealHighlightDurationMs: Number(this.nodes.revealHighlight.value),
+        revealHoldDurationMs: Number(this.nodes.revealHold.value),
         autoScrollAutomatic: this.nodes.autoScrollAutomatic.checked,
         autoScrollManual: this.nodes.autoScrollManual.checked,
         singleStepStartRank: this.nodes.singleStepStartRank.value,
@@ -489,6 +494,7 @@ export class ResolverPage {
     this.nodes.speed.value = String(settings.speedIndex);
     this.nodes.autoplay.checked = settings.autoplayAfterStart;
     this.nodes.revealHighlight.value = String(settings.revealHighlightDurationMs);
+    this.nodes.revealHold.value = String(settings.revealHoldDurationMs);
     this.nodes.autoScrollAutomatic.checked = settings.autoScrollAutomatic;
     this.nodes.autoScrollManual.checked = settings.autoScrollManual;
     this.nodes.awardPlaces.value = String(settings.awardPlaces);
@@ -502,6 +508,7 @@ export class ResolverPage {
     this.awardPlaces = settings.awardPlaces;
     this.singleStepStartRank = settings.singleStepStartRank;
     this.revealHighlightDurationMs = settings.revealHighlightDurationMs;
+    this.revealHoldDurationMs = settings.revealHoldDurationMs;
     this.autoScrollAutomatic = settings.autoScrollAutomatic;
     this.autoScrollManual = settings.autoScrollManual;
     this.hardPauses = {
@@ -808,6 +815,16 @@ export class ResolverPage {
   }
 
   _reorderTableBody(desiredRows) {
+    // Scores and ranks are already committed, but the MC gets time to read them
+    // at the old physical positions. Every render (including Pause/HUD/speed)
+    // must respect this order until the reveal hold ends.
+    if (this.heldRowOrder) {
+      desiredRows.sort(
+        (left, right) =>
+          (this.heldRowOrder.get(left.dataset.contestantId) ?? Infinity) -
+          (this.heldRowOrder.get(right.dataset.contestantId) ?? Infinity),
+      );
+    }
     desiredRows.forEach((row, index) => {
       const current = this.nodes.tableBody.children[index] ?? null;
       if (current !== row) {
@@ -949,7 +966,13 @@ export class ResolverPage {
 
   _updateContestantRow(row, contestant, standing, statsByProblem, activeSelection) {
     const refs = row._resolverRefs;
+    const animationClasses = [
+      "resolver-row--moving",
+      "resolver-row--reveal-highlight",
+      "resolver-row--reveal-highlight-subtle",
+    ].filter((name) => row.classList.contains(name));
     row.className = "resolver-row";
+    row.classList.add(...animationClasses);
     if (contestant.isDisqualified) {
       row.classList.add("resolver-row--disqualified", "disqualified");
     }
@@ -1052,6 +1075,9 @@ export class ResolverPage {
       normalizedId(activeSelection.problemId) === problemId
     ) {
       classes.push("resolver-cell--target");
+    }
+    if (tableCell.classList.contains("resolver-cell--reveal-highlight")) {
+      classes.push("resolver-cell--reveal-highlight");
     }
     tableCell.className = classes.join(" ");
 
@@ -1202,6 +1228,7 @@ export class ResolverPage {
     );
     this.nodes.play.disabled =
       this.policyName === "manual" ||
+      (this.busy && !playerState.running) ||
       (!remaining && !playerState.projection && !playerState.running);
     this.nodes.play.setAttribute("aria-pressed", String(playerState.running));
     this.nodes.speedLabel.textContent = speed.label;
@@ -1210,7 +1237,11 @@ export class ResolverPage {
     this.nodes.back.disabled =
       this.busy ||
       playerState.running ||
-      (this.policyName === "manual" ? historyCursor === 0 : playerState.checkpointIndex === 0);
+      (this.policyName === "manual"
+        ? historyCursor === 0
+        : playerState.checkpointIndex === 0 &&
+          historyCursor === 0 &&
+          !playerState.presentation.selectedContestantId);
     this.nodes.forward.disabled =
       this.busy ||
       playerState.running ||
@@ -1233,7 +1264,10 @@ export class ResolverPage {
     this.nodes.forward.textContent =
       this.policyName === "manual" ? gettext("Forward") : gettext("Fast forward");
     this.nodes.toggleHud.setAttribute("aria-pressed", String(this.hudVisible));
-    this.nodes.hud.hidden = !this.hudVisible;
+    this.nodes.toolbar.hidden = !this.controlsVisible;
+    this.nodes.status.hidden = !this.controlsVisible;
+    this.nodes.showControls.hidden = this.controlsVisible;
+    this.nodes.hud.hidden = !this.controlsVisible || !this.hudVisible;
     setIconLabel(
       this.nodes.fullscreen,
       document.fullscreenElement ? "fa-compress" : "fa-expand",
@@ -1333,6 +1367,36 @@ export class ResolverPage {
     return captureRowPositions(this.nodes.tableBody);
   }
 
+  async _animateReveal(transition, previousPositions, { subtleRows = false } = {}) {
+    const targets = transition.targets ?? [transition.target];
+    const previousOrder = [...previousPositions.keys()];
+    const nextOrder = this.session
+      .getStandings()
+      .map((standing) => normalizedId(standing.contestantId));
+    const moves = nextOrder.some((id, index) => id !== previousOrder[index]);
+    this.heldRowOrder = new Map(previousOrder.map((id, index) => [id, index]));
+    this._render();
+    const highlight = animateRevealHighlight(
+      this.rowElements,
+      targets,
+      this.revealHighlightDurationMs,
+      { subtleRows },
+    );
+    try {
+      // This is reading time, independent of playback speed or reduced motion.
+      // Pause completes this atomic reveal and prevents the next reveal.
+      if (moves && this.revealHoldDurationMs > 0) {
+        await new Promise((resolve) => globalThis.setTimeout(resolve, this.revealHoldDurationMs));
+      }
+      const beforeMovement = captureRowPositions(this.nodes.tableBody);
+      this.heldRowOrder = null;
+      this._render();
+      await Promise.all([animateRows(this.nodes.tableBody, beforeMovement), highlight]);
+    } finally {
+      this.heldRowOrder = null;
+    }
+  }
+
   async _performPlayerStep(step, context) {
     if (step.type === RESOLUTION_STEP_TYPES.SCROLL_ROW) {
       if (this.autoScrollAutomatic) {
@@ -1355,16 +1419,8 @@ export class ResolverPage {
         contestant: step.contestantLabel,
         problem: step.problemLabel,
       });
-      this._render();
       try {
-        await Promise.all([
-          animateRows(this.nodes.tableBody, context.beforeContext, 700),
-          animateRevealHighlight(
-            this.rowElements,
-            transition.targets ?? [transition.target],
-            this.revealHighlightDurationMs,
-          ),
-        ]);
+        await this._animateReveal(transition, context.beforeContext);
         if (this.autoScrollAutomatic) {
           ensureRowVisible(this.rowElements.get(normalizedId(step.target.contestantId)));
         }
@@ -1514,6 +1570,7 @@ export class ResolverPage {
     const previousPositions = captureRowPositions(this.nodes.tableBody);
     let transition = null;
     try {
+      this.player?.checkpointBeforeExternalChange(label);
       transition = this.session.revealBatch(targets);
       if (!transition) {
         return null;
@@ -1525,13 +1582,9 @@ export class ResolverPage {
         changedTargets.length,
         { label },
       );
-      this._render();
-      await Promise.all([
-        animateRows(this.nodes.tableBody, previousPositions),
-        animateRevealHighlight(this.rowElements, changedTargets, this.revealHighlightDurationMs, {
-          subtleRows: batchKind === "problem",
-        }),
-      ]);
+      await this._animateReveal(transition, previousPositions, {
+        subtleRows: batchKind === "problem",
+      });
       if (this.autoScrollManual && followContestantId !== null) {
         ensureRowVisible(this.rowElements.get(normalizedId(followContestantId)));
       }
@@ -1592,6 +1645,7 @@ export class ResolverPage {
     } else {
       this.session.reset();
     }
+    this.busy = true;
     this.policy.clear();
     this.statusMessage = gettext("%(action)s from %(baseline)s.", {
       action: useReplay ? gettext("Replay") : gettext("Reset"),
@@ -1604,6 +1658,9 @@ export class ResolverPage {
   }
 
   async _replay() {
+    if (this.busy) {
+      return;
+    }
     this._pausePlayback();
     await this._reset(true);
     if (this.player && this.session.getResolvableCount()) {
@@ -1614,6 +1671,25 @@ export class ResolverPage {
   _toggleHud() {
     this.hudVisible = !this.hudVisible;
     this._renderControls();
+  }
+
+  _toggleControls() {
+    this.controlsVisible = !this.controlsVisible;
+    this.nodes.more.open = false;
+    this._renderControls();
+    (this.controlsVisible ? this.nodes.hideControls : this.nodes.showControls).focus();
+  }
+
+  async _rewind() {
+    this._pausePlayback();
+    if (this.busy) {
+      return;
+    }
+    if (this.policyName === "manual") {
+      await this._moveHistory("back");
+    } else {
+      await this.player?.rewindToPreviousPause();
+    }
   }
 
   _showShortcuts() {
@@ -1648,17 +1724,26 @@ export class ResolverPage {
   }
 
   _handleShortcut(event) {
-    if (isTypingTarget(event.target)) {
+    if (
+      event.defaultPrevented ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      isTypingTarget(event.target)
+    ) {
       return;
     }
     if (event.key === "Escape") {
       if (!this.nodes.shortcuts.hidden) {
         event.preventDefault();
         this._hideShortcuts();
+      } else if (!this.controlsVisible && !this.nodes.workspace.hidden) {
+        event.preventDefault();
+        this._toggleControls();
       }
       return;
     }
-    if (this.nodes.workspace.hidden || !this.session) {
+    if (!this.nodes.shortcuts.hidden || this.nodes.workspace.hidden || !this.session) {
       return;
     }
     const key = event.key.toLowerCase();
@@ -1696,17 +1781,15 @@ export class ResolverPage {
     } else if (key === "h") {
       event.preventDefault();
       this._toggleHud();
+    } else if (key === "c") {
+      event.preventDefault();
+      this._toggleControls();
     } else if (key === "f") {
       event.preventDefault();
       void this._toggleFullscreen();
     } else if (key === "backspace" || key === "arrowleft") {
       event.preventDefault();
-      this._pausePlayback();
-      if (this.policyName === "manual") {
-        void this._moveHistory("back");
-      } else {
-        void this.player?.rewindToPreviousPause();
-      }
+      void this._rewind();
     } else if (key === "arrowright") {
       event.preventDefault();
       if (this.policyName === "manual") {

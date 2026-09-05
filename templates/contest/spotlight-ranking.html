@@ -64,6 +64,23 @@ contest.format_name == 'icpc' %} {% include "contest/media-icpc-css.html" %} {% 
             <option value="3">4×</option>
           </select>
         </div>
+        <div class="resolver-field">
+          <label for="resolver-reveal-hold">{{ _('Pause before moving rows') }}</label>
+          <select
+            id="resolver-reveal-hold"
+            name="reveal_hold"
+            aria-describedby="resolver-reveal-hold-help"
+          >
+            <option value="0">{{ _('Off') }}</option>
+            <option value="250">{{ _('0.25 seconds') }}</option>
+            <option value="500" selected>{{ _('0.5 seconds') }}</option>
+            <option value="750">{{ _('0.75 seconds') }}</option>
+            <option value="1000">{{ _('1 second') }}</option>
+          </select>
+          <span id="resolver-reveal-hold-help" class="resolver-field__help"
+            >{{ _('Show the new score and rank before moving, at every playback speed.') }}</span
+          >
+        </div>
         <label id="resolver-autoplay-field" class="resolver-check">
           <input id="resolver-autoplay" name="autoplay" type="checkbox" checked />
           {{ _('Autoplay after start') }}
@@ -169,7 +186,22 @@ contest.format_name == 'icpc' %} {% include "contest/media-icpc-css.html" %} {% 
   </section>
 
   <section id="resolver-workspace" aria-label="{{ _('Resolver standings') }}" hidden>
-    <div class="resolver-toolbar" role="group" aria-label="{{ _('Resolver controls') }}">
+    <button
+      id="resolver-show-controls"
+      type="button"
+      class="inline-button resolver-button resolver-show-controls"
+      aria-controls="resolver-toolbar"
+      title="{{ _('Show controls') }} (C / Esc)"
+      hidden
+    >
+      <i class="fa fa-eye"></i> {{ _('Show controls') }} (C)
+    </button>
+    <div
+      id="resolver-toolbar"
+      class="resolver-toolbar"
+      role="group"
+      aria-label="{{ _('Resolver controls') }}"
+    >
       <div class="resolver-toolbar__group">
         <button
           id="resolver-play"
@@ -211,6 +243,15 @@ contest.format_name == 'icpc' %} {% include "contest/media-icpc-css.html" %} {% 
         </button>
         <button id="resolver-fullscreen" type="button" class="inline-button resolver-button">
           <i class="fa fa-expand"></i> {{ _('Fullscreen') }}
+        </button>
+        <button
+          id="resolver-hide-controls"
+          type="button"
+          class="inline-button resolver-button"
+          aria-controls="resolver-toolbar"
+          title="{{ _('Hide controls') }} (C)"
+        >
+          <i class="fa fa-eye-slash"></i> {{ _('Hide controls') }}
         </button>
       </div>
       <div class="resolver-toolbar__group">
@@ -323,12 +364,14 @@ contest.format_name == 'icpc' %} {% include "contest/media-icpc-css.html" %} {% 
         <dd>{{ _('Fast forward to the same pause without narrative delays') }}</dd>
         <dt>H</dt>
         <dd>{{ _('Show or hide operator HUD') }}</dd>
+        <dt>C</dt>
+        <dd>{{ _('Show or hide presentation controls') }}</dd>
         <dt>F</dt>
         <dd>{{ _('Toggle fullscreen') }}</dd>
         <dt>? / /</dt>
         <dd>{{ _('Show this help') }}</dd>
         <dt>Esc</dt>
-        <dd>{{ _('Close help or leave fullscreen') }}</dd>
+        <dd>{{ _('Close help, show controls or leave fullscreen') }}</dd>
       </dl>
     </section>
   </div>

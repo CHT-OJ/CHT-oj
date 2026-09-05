@@ -33,6 +33,7 @@ test("presenter setup keeps engine details advanced and the HUD hidden by defaul
   assert.match(template, /id="resolver-tie-order"[^>]*type="hidden"[^>]*value="seeded"/);
   assert.match(template, /id="resolver-policy"[^>]*type="hidden"[^>]*value="row-sweep"/);
   assert.match(template, /id="resolver-reveal-highlight"/);
+  assert.match(template, /id="resolver-reveal-hold"/);
   assert.match(template, /id="resolver-auto-scroll-automatic"/);
   assert.match(template, /id="resolver-auto-scroll-manual"/);
   assert.equal(template.includes("data-resolver-preset"), false);
@@ -61,6 +62,9 @@ test("presenter toolbar exposes common actions and uses an accessible icon-only 
   assert.match(primaryGroup, /id="resolver-reset"/);
   assert.match(primaryGroup, /id="resolver-change-setup"/);
   assert.match(primaryGroup, /id="resolver-fullscreen"/);
+  assert.match(primaryGroup, /id="resolver-hide-controls"/);
+  assert.match(template, /id="resolver-show-controls"[\s\S]*?hidden/);
+  assert.match(template, /<dt>C<\/dt>/);
   assert.ok(overflowPanel);
   assert.match(overflowPanel, /id="resolver-forward"/);
   assert.match(overflowPanel, /id="resolver-replay"/);
